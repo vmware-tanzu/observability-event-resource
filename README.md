@@ -68,7 +68,7 @@ resource_types:
 - name: observability-events
   type: registry-image
   source:
-    repository: docker.pkg.github.com/vmware-tanzu/observability-event-resource/observability-event-resource
+    repository: projects.registry.vmware.com/tanzu/observability-event-resource
     tag: "1"
 
 resources:

@@ -33,9 +33,9 @@ resources:
 - name: github-registry
   type: registry-image-v1
   source:
-    repository: docker.pkg.github.com/vmware-tanzu/observability-event-resource/observability-event-resource
-    username: ((ghcr.username))
-    password: ((ghcr.password))
+    repository: projects.registry.vmware.com/tanzu/observability-event-resource
+    username: ((distro-harbor.username))
+    password: ((distro-harbor.password))
 
 jobs:
 - name: test-on-push
@@ -55,6 +55,7 @@ jobs:
       - name: source
       params:
         CONTEXT: source
+        REGISTRY_MIRRORS: ((dockerhub-registry-mirror))
       run:
         path: build
 
@@ -63,23 +64,9 @@ jobs:
   - get: source
     resource: release-source
     trigger: true
-  - task: get-version-build-arg
-    config:
-      platform: linux
-      image_resource:
-        type: registry-image
-        source:
-          repository: ubuntu
-      inputs:
-      - name: source
-      outputs:
-      - name: version
-      run:
-        path: bash
-        args:
-        - -xc
-        - |
-          echo "VERSION=$(cat source/.git/ref)" > version/version.txt
+  - load_var: version
+    file: source/.git/ref
+    format: trim
   - task: build-image
     privileged: true
     config: 
@@ -90,21 +77,18 @@ jobs:
           repository: vito/oci-build-task
       inputs:
       - name: source
-      - name: version
       outputs:
       - name: image
       params:
         CONTEXT: source
-        BUILD_ARGS_FILE: version/version.txt
+        BUILD_ARG_VERSION: ((.:version))
+        REGISTRY_MIRRORS: ((dockerhub-registry-mirror))
       run:
         path: build
-  - load_var: tag-version
-    file: source/.git/ref
-    format: trim
   - put: github-registry
     params:
       image: image/image.tar
-      version: ((.:tag-version))
+      version: ((.:version))
       bump_aliases: true
     get_params:
       skip_download: true

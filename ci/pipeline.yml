@@ -1,0 +1,98 @@
+# Copyright 2020 VMware, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+repo_creds: &repo-creds
+  uri: git@github.com:vmware-tanzu/observability-event-resource.git
+  private_key: ((oer_deploy_key))
+
+resources:
+- name: test-source
+  type: git
+  source:
+    <<: *repo-creds
+    paths:
+    - 'Dockerfile'
+    - 'go.*'
+    - '**/*.go'
+
+- name: release-source
+  type: git
+  source:
+    <<: *repo-creds
+    tag_filter: 'v*'
+
+- name: github-registry
+  type: registry-image
+  source:
+    repository: gchr.io/vmware-tanzu/observability-event-resource
+    username: ((ghcr.username))
+    password: ((ghcr.password))
+
+jobs:
+- name: test-on-push
+  plan:
+  - get: source
+    resource: test-source
+    trigger: true
+  - task: build-image
+    config: 
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: vito/oci-build-task
+      inputs:
+      - name: source
+      params:
+        CONTEXT: source
+      run:
+        path: build
+
+- name: build-release
+  plan:
+  - get: source
+    resource: release-source
+    trigger: true
+  - task: get-version
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: ubuntu
+      inputs:
+      - name: source
+      outputs:
+      - name: version
+      run:
+        path: bash
+        args:
+        - -xc
+        - |
+          outfile=$(pwd)/version/version.txt
+
+          ref=$(cat source/.git/ref)
+          [[ $ref =~ ^v* ]] && echo "VERSION=${ref}" > ${outfile} || echo "VERSION=v0.0.0-${ref}" > ${outfile}
+  - task: build-image
+    config: 
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: vito/oci-build-task
+      inputs:
+      - name: source
+      - name: version
+      outputs:
+      - name: image
+      params:
+        CONTEXT: source
+        BUILD_ARGS_FILE: version/version.txt
+      run:
+        path: build
+  - put: github-registry
+    params:
+      image: image/image.tar
+    get_params:
+      skip_download: true
+

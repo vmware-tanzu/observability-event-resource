@@ -7,7 +7,7 @@ repo_creds: &repo-creds
 
 # TODO: Remove this when Concourse 7 is released and v1 is included
 resource_types:
-- name: registry-image
+- name: registry-image-v1
   type: registry-image
   source:
     repository: concourse/registry-image-resource
@@ -27,12 +27,13 @@ resources:
   type: git
   source:
     <<: *repo-creds
+    fetch_tags: true
     tag_filter: 'v*'
 
 - name: github-registry
-  type: registry-image
+  type: registry-image-v1
   source:
-    repository: gchr.io/vmware-tanzu/observability-event-resource
+    repository: docker.pkg.github.com/vmware-tanzu/observability-event-resource/observability-event-resource
     username: ((ghcr.username))
     password: ((ghcr.password))
 
@@ -43,6 +44,7 @@ jobs:
     resource: test-source
     trigger: true
   - task: build-image
+    privileged: true
     config: 
       platform: linux
       image_resource:
@@ -79,6 +81,7 @@ jobs:
         - |
           echo "VERSION=$(cat source/.git/ref)" > version/version.txt
   - task: build-image
+    privileged: true
     config: 
       platform: linux
       image_resource:

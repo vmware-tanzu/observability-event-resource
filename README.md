@@ -68,15 +68,14 @@ resource_types:
 - name: observability-events
   type: registry-image
   source:
-    repository: dev.registry.pivotal.io/platform-management/observability-event-resource
-    username: ((tanzu-registry.username))
-    password: ((tanzu-registry.password))
+    repository: ghcr.io/vmware-tanzu/observability-event-resource
+    tag: "1"
 
 resources:
 - name: observability
   type: observability-events
   source:
-    tenant_url: https://vmwareprod.wavefront.com
+    tenant_url: https://longboard.wavefront.com
     api_token: ((my-secret-wavefront-token))
 
 jobs:

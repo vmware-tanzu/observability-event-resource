@@ -64,6 +64,11 @@ func RunCommand(stdin io.Reader, baseDir string, hc *http.Client, envFunc func(s
 		return Response{}, err
 	}
 
+	name, err := interpolateString(s.Params.Name, envFunc)
+	if err != nil {
+		return Response{}, err
+	}
+
 	tags, err := expandTags(s.Params.Tags, envFunc)
 	if err != nil {
 		return Response{}, err
@@ -71,7 +76,7 @@ func RunCommand(stdin io.Reader, baseDir string, hc *http.Client, envFunc func(s
 
 	switch s.Params.Action {
 	case CREATE:
-		eventJSON, err = client.CreateInstantEvent(s.Params.Name, annotations, tags)
+		eventJSON, err = client.CreateInstantEvent(name, annotations, tags)
 	case START:
 		eventJSON, err = client.StartOngoingEvent(s.Params.Name, annotations, tags)
 	case END:
@@ -125,7 +130,7 @@ func buildAnnotationsMap(custom map[string]string, envFunc func(string) string) 
 			continue
 		}
 
-		if annotations[k], err = envsubst.Eval(v, safeEnvSubst(envFunc)); err != nil {
+		if annotations[k], err = interpolateString(v, safeEnvSubst(envFunc)); err != nil {
 			return nil, err
 		}
 	}
@@ -138,10 +143,14 @@ func expandTags(tags []string, envFunc func(string) string) ([]string, error) {
 
 	newTags := make([]string, len(tags))
 	for i, tag := range tags {
-		if newTags[i], err = envsubst.Eval(tag, safeEnvSubst(envFunc)); err != nil {
+		if newTags[i], err = interpolateString(tag, safeEnvSubst(envFunc)); err != nil {
 			return nil, err
 		}
 	}
 
 	return newTags, nil
+}
+
+func interpolateString(s string, envFunc func(string) string) (string, error) {
+	return envsubst.Eval(s, safeEnvSubst(envFunc))
 }

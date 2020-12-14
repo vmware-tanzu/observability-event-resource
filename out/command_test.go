@@ -139,8 +139,8 @@ func TestVariablizedEvent(t *testing.T) {
 		t.Fatalf("expected 2 metadata but found %d", len(resp.Metadata))
 	}
 
-	if resp.Metadata[0].Value != "My event" {
-		t.Fatalf(`expected name to be "My event" but it was %q`, resp.Metadata[0].Value)
+	if resp.Metadata[0].Value != "My event in test-pipeline" {
+		t.Fatal("expected the ${BUILD_PIPELINE_NAME} parameter to be resolved, but it wasn't")
 	}
 
 	if resp.Metadata[1].Value != "ONGOING" {
@@ -237,7 +237,7 @@ const (
 		},
 		"params": {
 			"action": "start",
-			"event_name": "My event",
+			"event_name": "My event in ${BUILD_PIPELINE_NAME}",
 			"annotations": {
 				"foo": "bar",
 				"concourse-job": "${BUILD_JOB_NAME} starting"
@@ -251,7 +251,7 @@ const (
 		"status": {},
 		"response": {
 			"id": "12345",
-			"name": "My event",
+			"name": "My event in test-pipeline",
 			"runningState": "ONGOING",
 			"annotations": {
 				"foo": "bar",

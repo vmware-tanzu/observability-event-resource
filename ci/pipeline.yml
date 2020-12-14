@@ -5,6 +5,64 @@ repo_creds: &repo-creds
   uri: git@github.com:vmware-tanzu/observability-event-resource.git
   private_key: ((oer_deploy_key))
 
+load-version-var: &load-version-var
+  load_var: version
+  file: source/.git/ref
+  format: trim
+
+# Use an authenticated docker "client" to avoid rate limiting. You may remove this task
+# from the below jobs if you have a suitable proxy cache enabled
+build-auth: &build-auth
+  task: build-auth
+  config:
+    platform: linux
+    image_resource:
+      type: registry-image
+      source:
+        repository: ubuntu
+        tag: focal"
+        username: ((dockerhub.username))
+        password: ((dockerhub.password))
+    outputs:
+    - name: docker-creds
+    params:
+      DOCKER_REGISTRY: "https://index.docker.io/v1/"
+      DOCKER_USERNAME: ((dockerhub.username))
+      DOCKER_PASSWORD: ((dockerhub.password))
+    run:
+      path: bash
+      args:
+      - -c
+      - |
+        AUTH="$(echo -n "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" | base64 -w 0)"
+        cat > docker-creds/config.json <<EOF
+        { "auths": { "${DOCKER_REGISTRY}": { "auth": "$AUTH" }}}
+        EOF
+
+build-image: &build-image
+  task: build-image
+  privileged: true
+  config: 
+    platform: linux
+    image_resource:
+      type: registry-image
+      source:
+        repository: vito/oci-build-task
+        tag: master # Use this tag until https://github.com/vito/oci-build-task/commit/f23cb0c makes it into a tagged image
+    inputs:
+    - name: source
+    - name: docker-creds
+      optional: true
+    outputs:
+    - name: image
+    params:
+      DOCKER_CONFIG: docker-creds
+      CONTEXT: source
+      BUILD_ARG_VERSION: ((.:version))
+      # REGISTRY_MIRRORS: ((dockerhub-registry-mirror))
+    run:
+      path: build
+
 # TODO: Remove this when Concourse 7 is released and v1 is included
 resource_types:
 - name: registry-image-v1
@@ -30,7 +88,7 @@ resources:
     fetch_tags: true
     tag_filter: 'v*'
 
-- name: github-registry
+- name: distribution-harbor
   type: registry-image-v1
   source:
     repository: projects.registry.vmware.com/tanzu/observability-event-resource
@@ -39,58 +97,26 @@ resources:
 
 jobs:
 - name: test-on-push
-  plan:
+  plan: 
   - get: source
     resource: test-source
     trigger: true
-  - task: build-image
-    privileged: true
-    config: 
-      platform: linux
-      image_resource:
-        type: registry-image
-        source:
-          repository: vito/oci-build-task
-          tag: master
-      inputs:
-      - name: source
-      params:
-        CONTEXT: source
-        REGISTRY_MIRRORS: ((dockerhub-registry-mirror))
-      run:
-        path: build
+  - *load-version-var
+  - *build-auth
+  - *build-image
 
 - name: build-release
   plan:
   - get: source
     resource: release-source
     trigger: true
-  - load_var: version
-    file: source/.git/ref
-    format: trim
-  - task: build-image
-    privileged: true
-    config: 
-      platform: linux
-      image_resource:
-        type: registry-image
-        source:
-          repository: vito/oci-build-task
-      inputs:
-      - name: source
-      outputs:
-      - name: image
-      params:
-        CONTEXT: source
-        BUILD_ARG_VERSION: ((.:version))
-        REGISTRY_MIRRORS: ((dockerhub-registry-mirror))
-      run:
-        path: build
-  - put: github-registry
+  - *load-version-var
+  - *build-auth
+  - *build-image
+  - put: distribution-harbor
     params:
       image: image/image.tar
       version: ((.:version))
       bump_aliases: true
     get_params:
       skip_download: true
-

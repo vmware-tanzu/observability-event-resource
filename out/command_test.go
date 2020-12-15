@@ -97,6 +97,10 @@ func TestEndEvent(t *testing.T) {
 		t.Fatalf("an unexpected error occured: %v", err)
 	}
 
+	if err := ioutil.WriteFile(path.Join(baseDir, "some-event", "event.json"), []byte(startEventResponse), 0666); err != nil {
+		t.Fatalf("an unexpected error occured: %v", err)
+	}
+
 	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventResponse)
 
 	resp, err := out.RunCommand(stdin, baseDir, hc, os.Getenv)
@@ -119,6 +123,37 @@ func TestEndEvent(t *testing.T) {
 	if resp.Metadata[1].Value != "ENDED" {
 		t.Fatalf("expected state to be ENDED, but it was %s", resp.Metadata[1].Value)
 	}
+}
+
+func TestEndEventWithNewAnnotations(t *testing.T) {
+	stdin := strings.NewReader(endEventWithNewAnnotationsRequest)
+
+	baseDir := t.TempDir()
+	if err := os.MkdirAll(path.Join(baseDir, "some-event"), 0777); err != nil {
+		t.Fatalf("an unexpected error occured: %v", err)
+	}
+
+	if err := ioutil.WriteFile(path.Join(baseDir, "some-event", "id"), []byte("12345"), 0666); err != nil {
+		t.Fatalf("an unexpected error occured: %v", err)
+	}
+
+	if err := ioutil.WriteFile(path.Join(baseDir, "some-event", "event.json"), []byte(startEventResponse), 0666); err != nil {
+		t.Fatalf("an unexpected error occured: %v", err)
+	}
+
+	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventWithNewAnnotationsResponse)
+	internal.AddSubRequest(hc, http.MethodPut, "/api/v2/event/12345", "asdf", `{"response":{}}`)
+
+	_, err := out.RunCommand(stdin, baseDir, hc, os.Getenv)
+	if err != nil {
+		t.Fatalf("an unexpected error occurred: %v", err)
+	}
+
+	count := internal.GetURLHitCount(hc, "/api/v2/event/12345")
+	if count != 1 {
+		t.Fatalf("expected command to update the event 1 time, but it updated it %d times", count)
+	}
+
 }
 
 func TestVariablizedEvent(t *testing.T) {
@@ -147,7 +182,7 @@ func TestVariablizedEvent(t *testing.T) {
 		t.Fatalf("expected state to be ONGOING, but it was %s", resp.Metadata[1].Value)
 	}
 
-	requestBody := internal.GetSentRequest(hc)
+	requestBody := internal.GetSentRequest(hc, "/api/v2/event")
 	if !strings.Contains(requestBody, "test-job") {
 		t.Fatal("expected the ${BUILD_JOB_NAME} parameter to be resolved, but it wasn't")
 	}
@@ -258,6 +293,42 @@ const (
 				"concourse-job": "test-job starting"
 			},
 			"tags": ["tag1", "tag2", "test-pipeline"]
+		}
+	}
+	`
+
+	endEventWithNewAnnotationsRequest = `
+	{
+		"source": {
+			"tenant_url": "https://foo.com",
+			"api_token": "asdf"
+		},
+		"params": {
+			"action": "end",
+			"event": "some-event",
+			"annotations": {
+				"foo": "bar",
+				"concourse-job": "",
+				"severity": "FAILED"
+			},
+			"tags": ["tag1", "tag2"]
+		}
+	}
+	`
+
+	endEventWithNewAnnotationsResponse = `
+	{
+		"status": {},
+		"response": {
+			"id": "12345",
+			"name": "some-event",
+			"runningState": "ENDED",
+			"annotations": {
+				"foo": "bar",
+				"concourse-job": "",
+				"severity": "FAILED"
+			},
+			"tags": ["tag1", "tag2"]
 		}
 	}
 	`

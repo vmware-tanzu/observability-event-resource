@@ -13,30 +13,45 @@ import (
 	"github.com/vmware-tanzu/observability-event-resource/wavefront"
 )
 
+type request struct {
+	method        string
+	token         string
+	response      string
+	requestString string
+}
+
 type fakeRoundTripper struct {
-	method   string
-	path     string
-	token    string
-	request  string
-	response string
+	allowedURLs map[string]request
+	urlCounts   map[string]int
 }
 
 func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	recorder := httptest.ResponseRecorder{}
 
-	if f.method != req.Method {
-		recorder.Code = http.StatusMethodNotAllowed
+	if f.urlCounts == nil {
+		f.urlCounts = map[string]int{}
+	}
+
+	if _, ok := f.urlCounts[req.URL.Path]; !ok {
+		f.urlCounts[req.URL.Path] = 0
+	}
+
+	f.urlCounts[req.URL.Path]++
+
+	r, ok := f.allowedURLs[req.URL.Path]
+	if !ok {
+		recorder.Code = http.StatusNotFound
 		return recorder.Result(), nil
 	}
 
-	if f.path != req.URL.Path {
-		recorder.Code = http.StatusNotFound
+	if r.method != req.Method {
+		recorder.Code = http.StatusMethodNotAllowed
 		return recorder.Result(), nil
 	}
 
 	token := req.Header.Get("Authorization")
 	token = strings.TrimPrefix(token, "Bearer ")
-	if f.token != token {
+	if r.token != token {
 		recorder.Code = http.StatusUnauthorized
 		return recorder.Result(), nil
 	}
@@ -45,22 +60,21 @@ func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		b := &bytes.Buffer{}
 		io.Copy(b, req.Body)
 
-		f.request = b.String()
+		r.requestString = b.String()
 	}
 
 	recorder.Code = http.StatusOK
-	recorder.Body = bytes.NewBufferString(f.response)
+	recorder.Body = bytes.NewBufferString(r.response)
 	return recorder.Result(), nil
 }
 
 func GetFakeHTTPClient(method, path, token, response string) *http.Client {
 	f := &fakeRoundTripper{
-		method,
-		path,
-		token,
-		"",
-		response,
+		allowedURLs: map[string]request{},
+		urlCounts:   map[string]int{},
 	}
+
+	f.addSubRequest(method, path, token, "", response)
 
 	hc := http.DefaultClient
 	hc.Transport = f
@@ -68,20 +82,62 @@ func GetFakeHTTPClient(method, path, token, response string) *http.Client {
 	return hc
 }
 
-func GetSentRequest(hc *http.Client) string {
+func GetSentRequest(hc *http.Client, url string) string {
+	var f *fakeRoundTripper
+
 	switch hc.Transport.(type) {
 	case *fakeRoundTripper:
-		f := hc.Transport.(*fakeRoundTripper)
-		return f.request
+		f = hc.Transport.(*fakeRoundTripper)
 	case *wavefront.AuthRoundTripper:
 		a := hc.Transport.(*wavefront.AuthRoundTripper)
-		delegate := a.GetDelegate()
-		if f, ok := delegate.(*fakeRoundTripper); ok {
-			return f.request
-		}
+		f = a.GetDelegate().(*fakeRoundTripper)
+	}
 
+	r, ok := f.allowedURLs[url]
+	if !ok {
 		return ""
-	default:
-		return ""
+	}
+
+	return r.requestString
+}
+
+func GetURLHitCount(hc *http.Client, url string) int {
+	var f *fakeRoundTripper
+
+	switch hc.Transport.(type) {
+	case *fakeRoundTripper:
+		f = hc.Transport.(*fakeRoundTripper)
+	case *wavefront.AuthRoundTripper:
+		a := hc.Transport.(*wavefront.AuthRoundTripper)
+		f = a.GetDelegate().(*fakeRoundTripper)
+	}
+
+	if v, ok := f.urlCounts[url]; ok {
+		return v
+	}
+
+	return 0
+}
+
+func AddSubRequest(hc *http.Client, method, path, token, response string) {
+	var f *fakeRoundTripper
+
+	switch hc.Transport.(type) {
+	case *fakeRoundTripper:
+		f = hc.Transport.(*fakeRoundTripper)
+	case *wavefront.AuthRoundTripper:
+		a := hc.Transport.(*wavefront.AuthRoundTripper)
+		f = a.GetDelegate().(*fakeRoundTripper)
+	}
+
+	f.addSubRequest(method, path, token, "", response)
+}
+
+func (f *fakeRoundTripper) addSubRequest(method, path, token, requestString, response string) {
+	f.allowedURLs[path] = request{
+		method:        method,
+		token:         token,
+		requestString: requestString,
+		response:      response,
 	}
 }

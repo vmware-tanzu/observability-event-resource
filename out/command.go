@@ -78,16 +78,22 @@ func RunCommand(stdin io.Reader, baseDir string, hc *http.Client, envFunc func(s
 	case CREATE:
 		eventJSON, err = client.CreateInstantEvent(name, annotations, tags)
 	case START:
-		eventJSON, err = client.StartOngoingEvent(s.Params.Name, annotations, tags)
+		eventJSON, err = client.StartOngoingEvent(name, annotations, tags)
 	case END:
-		filePath := filepath.Join(baseDir, s.Params.Event, "id")
-		idBytes, ferr := ioutil.ReadFile(filePath)
+		idFilePath := filepath.Join(baseDir, s.Params.Event, "id")
+		idBytes, ferr := ioutil.ReadFile(idFilePath)
 		if ferr != nil {
 			return Response{}, fmt.Errorf("could not read event ID to close: %w", ferr)
 		}
 		id := strings.TrimSpace(string(idBytes))
 
-		eventJSON, err = client.EndOngoingEvent(id)
+		jsonFilePath := filepath.Join(baseDir, s.Params.Event, "event.json")
+		jsonBytes, ferr := ioutil.ReadFile(jsonFilePath)
+		if ferr != nil {
+			return Response{}, fmt.Errorf("could not parse event json: %w", ferr)
+		}
+
+		eventJSON, err = client.EndOngoingEvent(id, jsonBytes, annotations)
 	}
 	if err != nil {
 		return Response{}, fmt.Errorf("could not complete API call: %w", err)

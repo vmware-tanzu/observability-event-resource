@@ -21,7 +21,7 @@ type request struct {
 }
 
 type fakeRoundTripper struct {
-	allowedURLs map[string]request
+	allowedURLs map[string]*request
 	urlCounts   map[string]int
 }
 
@@ -70,7 +70,7 @@ func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 func GetFakeHTTPClient(method, path, token, response string) *http.Client {
 	f := &fakeRoundTripper{
-		allowedURLs: map[string]request{},
+		allowedURLs: map[string]*request{},
 		urlCounts:   map[string]int{},
 	}
 
@@ -83,15 +83,7 @@ func GetFakeHTTPClient(method, path, token, response string) *http.Client {
 }
 
 func GetSentRequest(hc *http.Client, url string) string {
-	var f *fakeRoundTripper
-
-	switch hc.Transport.(type) {
-	case *fakeRoundTripper:
-		f = hc.Transport.(*fakeRoundTripper)
-	case *wavefront.AuthRoundTripper:
-		a := hc.Transport.(*wavefront.AuthRoundTripper)
-		f = a.GetDelegate().(*fakeRoundTripper)
-	}
+	f := getRoundTripperFromClient(hc)
 
 	r, ok := f.allowedURLs[url]
 	if !ok {
@@ -102,16 +94,7 @@ func GetSentRequest(hc *http.Client, url string) string {
 }
 
 func GetURLHitCount(hc *http.Client, url string) int {
-	var f *fakeRoundTripper
-
-	switch hc.Transport.(type) {
-	case *fakeRoundTripper:
-		f = hc.Transport.(*fakeRoundTripper)
-	case *wavefront.AuthRoundTripper:
-		a := hc.Transport.(*wavefront.AuthRoundTripper)
-		f = a.GetDelegate().(*fakeRoundTripper)
-	}
-
+	f := getRoundTripperFromClient(hc)
 	if v, ok := f.urlCounts[url]; ok {
 		return v
 	}
@@ -120,6 +103,20 @@ func GetURLHitCount(hc *http.Client, url string) int {
 }
 
 func AddSubRequest(hc *http.Client, method, path, token, response string) {
+	f := getRoundTripperFromClient(hc)
+	f.addSubRequest(method, path, token, "", response)
+}
+
+func (f *fakeRoundTripper) addSubRequest(method, path, token, requestString, response string) {
+	f.allowedURLs[path] = &request{
+		method:        method,
+		token:         token,
+		requestString: requestString,
+		response:      response,
+	}
+}
+
+func getRoundTripperFromClient(hc *http.Client) *fakeRoundTripper {
 	var f *fakeRoundTripper
 
 	switch hc.Transport.(type) {
@@ -130,14 +127,5 @@ func AddSubRequest(hc *http.Client, method, path, token, response string) {
 		f = a.GetDelegate().(*fakeRoundTripper)
 	}
 
-	f.addSubRequest(method, path, token, "", response)
-}
-
-func (f *fakeRoundTripper) addSubRequest(method, path, token, requestString, response string) {
-	f.allowedURLs[path] = request{
-		method:        method,
-		token:         token,
-		requestString: requestString,
-		response:      response,
-	}
+	return f
 }

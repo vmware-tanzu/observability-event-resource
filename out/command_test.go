@@ -103,7 +103,7 @@ func TestEndEvent(t *testing.T) {
 
 	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventResponse)
 
-	resp, err := out.RunCommand(stdin, baseDir, hc, os.Getenv)
+	resp, err := out.RunCommand(stdin, baseDir, hc, envFunc)
 	if err != nil {
 		t.Fatalf("an unexpected error occurred: %v", err)
 	}
@@ -228,7 +228,12 @@ const (
 			"runningState": "ONGOING",
 			"annotations": {
 				"foo": "bar",
-				"concourse-job": ""
+				"concourse-job": "",
+				"concourse-team": "",
+				"concourse-pipeline": "test-pipeline",
+				"concourse-build-url": "/builds/",
+				"severity": "info",
+				"details": "Created by concourse observability-event-resource version 0.0.0-dev"
 			},
 			"tags": ["tag1", "tag2"]
 		}
@@ -256,8 +261,12 @@ const (
 			"name": "My event",
 			"runningState": "ENDED",
 			"annotations": {
-				"foo": "bar",
-				"concourse-job": ""
+				"concourse-job": "test-job",
+				"concourse-team": "",
+				"concourse-pipeline": "test-pipeline",
+				"concourse-build-url": "/builds/",
+				"severity": "info",
+				"details": "Created by concourse observability-event-resource version 0.0.0-dev"
 			},
 			"tags": ["tag1", "tag2"]
 		}
@@ -290,7 +299,12 @@ const (
 			"runningState": "ONGOING",
 			"annotations": {
 				"foo": "bar",
-				"concourse-job": "test-job starting"
+				"concourse-job": "test-job starting",
+				"concourse-team": "",
+				"concourse-pipeline": "test-pipeline",
+				"concourse-build-url": "/builds/",
+				"severity": "info",
+				"details": "Created by concourse observability-event-resource version 0.0.0-dev"
 			},
 			"tags": ["tag1", "tag2", "test-pipeline"]
 		}
@@ -326,7 +340,11 @@ const (
 			"annotations": {
 				"foo": "bar",
 				"concourse-job": "",
-				"severity": "FAILED"
+				"severity": "FAILED",
+				"concourse-team": "",
+				"concourse-pipeline": "test-pipeline",
+				"concourse-build-url": "/builds/",
+				"details": "Created by concourse observability-event-resource version 0.0.0-dev"
 			},
 			"tags": ["tag1", "tag2"]
 		}

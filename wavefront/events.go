@@ -67,7 +67,7 @@ func (a *APIClient) createEvent(name string, annotations map[string]string, tags
 }
 
 func (a *APIClient) EndOngoingEvent(eventID string, eventJSON []byte, newAnnotations map[string]string) ([]byte, error) {
-	if eventJSON != nil {
+	if eventJSON != nil && newAnnotations != nil {
 		var existingAnnotations interface{}
 		var event interface{}
 

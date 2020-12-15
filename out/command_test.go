@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vmware-tanzu/observability-event-resource/internal"
+	"github.com/vmware-tanzu/observability-event-resource/internal/testutils"
 	"github.com/vmware-tanzu/observability-event-resource/out"
 )
 
@@ -61,7 +61,7 @@ func TestParamValidation(t *testing.T) {
 func TestStartEvent(t *testing.T) {
 	stdin := strings.NewReader(startEventRequest)
 
-	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event", "asdf", startEventResponse)
+	hc := testutils.GetFakeHTTPClient(http.MethodPost, "/api/v2/event", "asdf", startEventResponse)
 
 	resp, err := out.RunCommand(stdin, "", hc, os.Getenv)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestEndEvent(t *testing.T) {
 		t.Fatalf("an unexpected error occured: %v", err)
 	}
 
-	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventResponse)
+	hc := testutils.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventResponse)
 
 	resp, err := out.RunCommand(stdin, baseDir, hc, envFunc)
 	if err != nil {
@@ -141,15 +141,15 @@ func TestEndEventWithNewAnnotations(t *testing.T) {
 		t.Fatalf("an unexpected error occured: %v", err)
 	}
 
-	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventWithNewAnnotationsResponse)
-	internal.AddSubRequest(hc, http.MethodPut, "/api/v2/event/12345", "asdf", `{"response":{}}`)
+	hc := testutils.GetFakeHTTPClient(http.MethodPost, "/api/v2/event/12345/close", "asdf", endEventWithNewAnnotationsResponse)
+	testutils.AddSubRequest(hc, http.MethodPut, "/api/v2/event/12345", "asdf", `{"response":{}}`)
 
 	_, err := out.RunCommand(stdin, baseDir, hc, os.Getenv)
 	if err != nil {
 		t.Fatalf("an unexpected error occurred: %v", err)
 	}
 
-	count := internal.GetURLHitCount(hc, "/api/v2/event/12345")
+	count := testutils.GetURLHitCount(hc, "/api/v2/event/12345")
 	if count != 1 {
 		t.Fatalf("expected command to update the event 1 time, but it updated it %d times", count)
 	}
@@ -159,7 +159,7 @@ func TestEndEventWithNewAnnotations(t *testing.T) {
 func TestVariablizedEvent(t *testing.T) {
 	stdin := strings.NewReader(variablizedEventRequest)
 
-	hc := internal.GetFakeHTTPClient(http.MethodPost, "/api/v2/event", "asdf", variablizedEventResponse)
+	hc := testutils.GetFakeHTTPClient(http.MethodPost, "/api/v2/event", "asdf", variablizedEventResponse)
 
 	resp, err := out.RunCommand(stdin, "", hc, envFunc)
 	if err != nil {
@@ -182,7 +182,7 @@ func TestVariablizedEvent(t *testing.T) {
 		t.Fatalf("expected state to be ONGOING, but it was %s", resp.Metadata[1].Value)
 	}
 
-	requestBody := internal.GetSentRequest(hc, "/api/v2/event")
+	requestBody := testutils.GetSentRequest(hc, "/api/v2/event")
 	if !strings.Contains(requestBody, "test-job") {
 		t.Fatal("expected the ${BUILD_JOB_NAME} parameter to be resolved, but it wasn't")
 	}

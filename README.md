@@ -38,9 +38,9 @@ a running state of `ONGOING`, or close an event with the given ID.
   to a previous event's `get` step, containing its `id` file.
 * `event_name`: *Required if action is `start` or `create`, ignored if action is `end`*. The name of
   the event to be created
-* `annotations`: *Optional, ignored if action is `end`*. A map of key-value pairs
-  that will be added as annotations to the event. Values MUST be strings. In addition 
-  to any annotations specified here, the following annotations will be added:
+* `annotations`: *Optional*. A map of key-value pairs that will be added as annotations to the event. 
+  Values MUST be strings. In addition to any annotations specified here, the following annotations 
+  will be added:
   ```
   concourse-team: ${BUILD_TEAM_NAME}
   concourse-pipeline: ${BUILD_PIPELINE_NAME}
@@ -52,12 +52,14 @@ a running state of `ONGOING`, or close an event with the given ID.
   If you do not want one of those annotations on your event, add it as a custom 
   annotation with a value of `""`.
 
-  Note that custom annotations currently do not support interpolating environment 
-  variables.
+  If annotations are set on a `put` with `action == "end"`, those annotations will
+  be added or updated on the original event. This is useful, for example, for changing
+  the `severity` annotation from `INFO` to `FAILED`, or something similar.
+
 * `tags`: *Optional, ignored if action is `end`*. A list of strings to be added as
   tags on the event.
    
-**Note**: Both `annotations` and `tags` support very simple variable interpolation. For the list of
+**Note**: `event_name`, `annotations`, and `tags` support very simple variable interpolation. For the list of
 allowed variables, see [here](https://concourse-ci.org/implementing-resource-types.html#resource-metadata) 
 and for a list of substitution patterns, see [here](https://github.com/drone/envsubst/blob/v1.0.2/README).
 
@@ -86,6 +88,8 @@ jobs:
       action: start
       event_name: Pipeline Started
       tags: ["${BUILD_PIPELINE_NAME}"]
+      annotations:
+        severity: INFO
 - name: do-a-thing
   plan:
   - get: observability
@@ -102,4 +106,6 @@ jobs:
     params:
       action: end
       event: observability
+      annotations:
+        severity: SUCCESS
 ```

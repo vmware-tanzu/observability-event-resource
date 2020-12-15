@@ -17,7 +17,7 @@ import (
 	"github.com/mitchellh/pointerstructure"
 	resource "github.com/vmware-tanzu/observability-event-resource"
 	"github.com/vmware-tanzu/observability-event-resource/in"
-	"github.com/vmware-tanzu/observability-event-resource/internal"
+	"github.com/vmware-tanzu/observability-event-resource/internal/testutils"
 )
 
 func TestInvalidSource(t *testing.T) {
@@ -47,7 +47,7 @@ func TestInvalidSource(t *testing.T) {
 func TestIn(t *testing.T) {
 	stdin := strings.NewReader(`{"source": {"tenant_url": "https://foo", "api_token": "bar"}, "version": {"id": "1234"}}`)
 
-	hc := internal.GetFakeHTTPClient(http.MethodGet, "/api/v2/event/1234", "bar", fakeOngoingEventJSON)
+	hc := testutils.GetFakeHTTPClient(http.MethodGet, "/api/v2/event/1234", "bar", fakeOngoingEventJSON)
 
 	tmpDir := t.TempDir()
 	resp, err := in.RunCommand(stdin, tmpDir, hc)

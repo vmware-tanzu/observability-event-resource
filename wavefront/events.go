@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"time"
 
 	"github.com/mitchellh/pointerstructure"
@@ -65,13 +66,48 @@ func (a *APIClient) createEvent(name string, annotations map[string]string, tags
 	return a.doEventRequest(req)
 }
 
-func (a *APIClient) EndOngoingEvent(eventID string) ([]byte, error) {
+func (a *APIClient) EndOngoingEvent(eventID string, eventJSON []byte, newAnnotations map[string]string) ([]byte, error) {
+	if eventJSON != nil && newAnnotations != nil {
+		var event interface{}
+
+		err := json.NewDecoder(bytes.NewBuffer(eventJSON)).Decode(&event)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse event json: %w", err)
+		}
+
+		newEvent, err := mergeAnnotationsIntoEvent(event, newAnnotations)
+		if err != nil {
+			return nil, fmt.Errorf("error merging new annotations with existing annotations: %w", err)
+		}
+
+		if newEvent != nil { // newEvent will be nil if no changes were made, so if it's not nil, we need to update
+			if err = a.updateExistingEvent(eventID, newEvent); err != nil {
+				return nil, fmt.Errorf("could not update event: %w", err)
+			}
+		}
+	}
+
 	req, err := a.newRequest(http.MethodPost, fmt.Sprintf("/api/v2/event/%s/close", url.PathEscape(eventID)), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return a.doEventRequest(req)
+}
+
+func (a *APIClient) updateExistingEvent(eventID string, event interface{}) error {
+	bodyBytes, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("could not serialize to json: %w", err)
+	}
+
+	req, err := a.newRequest(http.MethodPut, fmt.Sprintf("/api/v2/event/%s", url.PathEscape(eventID)), bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("error generating HTTP request: %w", err)
+	}
+
+	_, err = a.doEventRequest(req)
+	return err
 }
 
 func (a *APIClient) doEventRequest(req *http.Request) ([]byte, error) {
@@ -137,4 +173,60 @@ func getStr(event interface{}, query string) (string, error) {
 	}
 
 	return str, nil
+}
+
+func mergeAnnotationsIntoEvent(event interface{}, newAnnotations map[string]string) (interface{}, error) {
+	var (
+		existingAnnotations interface{}
+		err                 error
+	)
+
+	if existingAnnotations, err = pointerstructure.Get(event, "/response/annotations"); err != nil {
+		return nil, fmt.Errorf("could not retrieve required annotations field: %w", err)
+	}
+
+	finalMap := map[string]interface{}{}
+	existingAnnotationMap, ok := existingAnnotations.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected existing annotations to be map[string]interface{} but it was %T", existingAnnotations)
+	}
+
+	for k, v := range existingAnnotationMap {
+		finalMap[k] = v
+	}
+
+	for k, v := range newAnnotations {
+		if v == "" {
+			if _, ok = finalMap[k]; ok {
+				str, ok := finalMap[k].(string)
+				if !ok {
+					return nil, fmt.Errorf("expected value at %s to be a string, but it was %T", k, v)
+				}
+				if str != "" {
+					// if the existing annotation is not "" and the new one is, delete the key from finalMap
+					delete(finalMap, k)
+					continue
+				}
+			}
+
+			continue
+		}
+
+		finalMap[k] = v
+	}
+
+	if !reflect.DeepEqual(existingAnnotations, finalMap) {
+		if event, err = pointerstructure.Set(event, "/response/annotations", newAnnotations); err != nil {
+			return nil, fmt.Errorf("could not modify annotations: %w", err)
+		}
+
+		newEvent, err := pointerstructure.Get(event, "/response")
+		if err != nil {
+			return nil, fmt.Errorf("could not get response JSON: %w", err)
+		}
+
+		return newEvent, nil
+	}
+
+	return nil, nil
 }

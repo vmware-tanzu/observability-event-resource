@@ -78,16 +78,27 @@ func RunCommand(stdin io.Reader, baseDir string, hc *http.Client, envFunc func(s
 	case CREATE:
 		eventJSON, err = client.CreateInstantEvent(name, annotations, tags)
 	case START:
-		eventJSON, err = client.StartOngoingEvent(s.Params.Name, annotations, tags)
+		eventJSON, err = client.StartOngoingEvent(name, annotations, tags)
 	case END:
-		filePath := filepath.Join(baseDir, s.Params.Event, "id")
-		idBytes, ferr := ioutil.ReadFile(filePath)
+		idFilePath := filepath.Join(baseDir, s.Params.Event, "id")
+		idBytes, ferr := ioutil.ReadFile(idFilePath)
 		if ferr != nil {
 			return Response{}, fmt.Errorf("could not read event ID to close: %w", ferr)
 		}
 		id := strings.TrimSpace(string(idBytes))
 
-		eventJSON, err = client.EndOngoingEvent(id)
+		jsonFilePath := filepath.Join(baseDir, s.Params.Event, "event.json")
+		jsonBytes, ferr := ioutil.ReadFile(jsonFilePath)
+		if ferr != nil {
+			return Response{}, fmt.Errorf("could not parse event json: %w", ferr)
+		}
+
+		// if there are no annotations here, we want to do nothing to them in the end event
+		if s.Params.Annotations == nil {
+			annotations = nil
+		}
+
+		eventJSON, err = client.EndOngoingEvent(id, jsonBytes, annotations)
 	}
 	if err != nil {
 		return Response{}, fmt.Errorf("could not complete API call: %w", err)
@@ -121,7 +132,7 @@ func buildAnnotationsMap(custom map[string]string, envFunc func(string) string) 
 	annotations["concourse-job"] = envFunc("BUILD_JOB_NAME")
 	annotations["concourse-build-url"] = fmt.Sprintf("%s/builds/%s", envFunc("ATC_EXTERNAL_URL"), envFunc("BUILD_ID"))
 	annotations["severity"] = "info"
-	annotations["details"] = fmt.Sprintf("Created by concourse wavefront-event-resource version %s", resource.AppVersion)
+	annotations["details"] = fmt.Sprintf("Created by Concourse observability-event-resource version %s", resource.AppVersion)
 
 	var err error
 	for k, v := range custom {

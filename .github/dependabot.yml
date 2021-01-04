@@ -1,0 +1,13 @@
+version: 2
+
+updates:
+- directory: "/"
+  open-pull-requests-limit: 10
+  package-ecosystem: gomod
+  rebase-strategy: auto
+  schedule:
+    interval: "weekly"
+    day: "monday"
+  assignees:
+  - jghiloni
+  

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -118,7 +119,14 @@ func (a *APIClient) doEventRequest(req *http.Request) ([]byte, error) {
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: expected 200, got %d", ErrBadResponseStatus, response.StatusCode)
+		err := fmt.Errorf("%w: expected 200, got %d", ErrBadResponseStatus, response.StatusCode)
+		if a.debug {
+			if respBody, readErr := ioutil.ReadAll(response.Body); readErr == nil {
+				err = fmt.Errorf("%w: %s", ErrBadResponseStatus, string(respBody))
+			}
+		}
+
+		return nil, err
 	}
 
 	var resp singleItemResponse

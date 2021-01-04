@@ -16,6 +16,7 @@ import (
 type APIClient struct {
 	client  *http.Client
 	baseURL string
+	debug   bool
 }
 
 func NewAPIClient(source resource.Source, client *http.Client) *APIClient {
@@ -37,6 +38,7 @@ func NewAPIClient(source resource.Source, client *http.Client) *APIClient {
 	return &APIClient{
 		client:  client,
 		baseURL: strings.TrimSuffix(source.WavefrontURL, "/"),
+		debug:   source.Debug,
 	}
 }
 

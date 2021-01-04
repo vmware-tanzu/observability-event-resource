@@ -22,6 +22,7 @@ var AppVersion = "0.0.0-dev"
 type Source struct {
 	WavefrontURL   string `json:"tenant_url"`
 	WavefrontToken string `json:"api_token"`
+	Debug          bool   `json:"debug"`
 }
 
 // Validate ensures that the source's required properties are set

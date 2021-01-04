@@ -20,7 +20,7 @@ build-auth: &build-auth
       type: registry-image
       source:
         repository: ubuntu
-        tag: focal"
+        tag: focal
         username: ((dockerhub.username))
         password: ((dockerhub.password))
     outputs:
@@ -49,6 +49,8 @@ build-image: &build-image
       source:
         repository: vito/oci-build-task
         tag: master # Use this tag until https://github.com/vito/oci-build-task/commit/f23cb0c makes it into a tagged image
+        username: ((dockerhub.username))
+        password: ((dockerhub.password))
     inputs:
     - name: source
     - name: docker-creds
@@ -70,6 +72,8 @@ resource_types:
   source:
     repository: concourse/registry-image-resource
     tag: '1'
+    username: ((dockerhub.username))
+    password: ((dockerhub.password))
 
 resources:
 - name: test-source

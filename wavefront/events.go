@@ -6,6 +6,7 @@ package wavefront
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/mitchellh/pointerstructure"
 	resource "github.com/vmware-tanzu/observability-event-resource"
 )
@@ -112,22 +114,43 @@ func (a *APIClient) updateExistingEvent(eventID string, event interface{}) error
 }
 
 func (a *APIClient) doEventRequest(req *http.Request) ([]byte, error) {
-	response, err := a.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
+	var (
+		response *http.Response
+		err      error
+	)
 
-	if response.StatusCode != http.StatusOK {
-		err := fmt.Errorf("%w: expected 200, got %d", ErrBadResponseStatus, response.StatusCode)
-		if a.debug {
+	operation := backoff.Operation(func() error {
+		response, err = a.client.Do(req)
+		if err != nil {
+			return backoff.Permanent(err)
+		}
+
+		if response.StatusCode != http.StatusOK {
+			if response.StatusCode == http.StatusNotAcceptable {
+				return errors.New("retry")
+			}
+
+			return backoff.Permanent(fmt.Errorf("%w: expected 200, got %d", ErrBadResponseStatus, response.StatusCode))
+		}
+
+		return nil
+	})
+
+	exp := backoff.NewExponentialBackOff()
+	exp.MaxElapsedTime = 2 * time.Minute
+
+	err = backoff.Retry(operation, exp)
+	if err != nil {
+		if response != nil && response.Body != nil {
+			defer response.Body.Close()
 			if respBody, readErr := ioutil.ReadAll(response.Body); readErr == nil {
-				err = fmt.Errorf("%w: %s", ErrBadResponseStatus, string(respBody))
+				err = fmt.Errorf("%w: %s", err, string(respBody))
 			}
 		}
 
 		return nil, err
 	}
+	defer response.Body.Close()
 
 	var resp singleItemResponse
 	if err = json.NewDecoder(response.Body).Decode(&resp); err != nil {

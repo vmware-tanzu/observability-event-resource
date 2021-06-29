@@ -1,5 +1,7 @@
 FROM golang:1 AS builder
 
+LABEL maintainers="Josh Ghiloni <jghiloni@vmware.com>"
+
 ARG VERSION="0.0.0-dev"
 
 ENV CGO_ENABLED 0
@@ -30,3 +32,5 @@ RUN set -e; for test in /tests/*.test; do \
 FROM scratch
 COPY --from=builder /assets /opt/resource
 COPY --from=resource /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=resource /etc/passwd /etc
+COPY --from=resource /etc/shadow /etc

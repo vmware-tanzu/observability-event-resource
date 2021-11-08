@@ -5,5 +5,5 @@ go 1.15
 require (
 	github.com/cenkalti/backoff/v4 v4.1.1
 	github.com/drone/envsubst v1.0.3
-	github.com/mitchellh/pointerstructure v1.2.0
+	github.com/mitchellh/pointerstructure v1.2.1
 )
